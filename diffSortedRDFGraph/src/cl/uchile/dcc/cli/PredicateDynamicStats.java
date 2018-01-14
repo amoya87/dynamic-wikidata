@@ -14,6 +14,8 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.TreeSet;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
@@ -61,7 +63,7 @@ class MutableTripla {
 
 public class PredicateDynamicStats {
 
-	public static String SPLIT_REGEX = " ";
+	public static String TRIPLE_REGEX = "^(<[^>]+>)\\s+(<[^>]+>)\\s+(.*)\\s?.$";
 	public static int TICKS = 10000000;
 
 	public static void main(String[] args) throws IOException {
@@ -194,9 +196,10 @@ public class PredicateDynamicStats {
 				comp = leftTriple.compareTo(rightTriple);
 			}
 
-			if (comp < 0) {// triplet eliminado
-				String[] ltriple = leftTriple.split(SPLIT_REGEX);
-				String lpred = ltriple[1];
+			Pattern pattern = Pattern.compile(TRIPLE_REGEX);
+			if (comp < 0) {// triplet eliminado				
+				Matcher lmatcher = pattern.matcher(leftTriple);
+				String lpred = lmatcher.group(2);
 				count = preds.get(lpred);
 				if (count == null) {
 					preds.put(lpred, new MutableTripla(1, 0, 1));
@@ -206,9 +209,10 @@ public class PredicateDynamicStats {
 				output.println("-\t" + leftTriple);
 				leftTriple = inputl.readLine();
 				++ltripleCount;
+
 			} else if (comp > 0) {// triplet agregado
-				String[] rtriple = rightTriple.split(SPLIT_REGEX);
-				String rpred = rtriple[1];
+				Matcher rmatcher = pattern.matcher(rightTriple);
+				String rpred = rmatcher.group(2);				
 				count = preds.get(rpred);
 				if (count == null) {
 					preds.put(rpred, new MutableTripla(1, 1, 0));
@@ -218,9 +222,10 @@ public class PredicateDynamicStats {
 				output.println("+\t" + rightTriple);
 				rightTriple = inputr.readLine();
 				++rtripleCount;
+				
 			} else {// iguales
-				String[] ltriple = leftTriple.split(SPLIT_REGEX);
-				String lpred = ltriple[1];
+				Matcher lmatcher = pattern.matcher(leftTriple);
+				String lpred = lmatcher.group(2);
 				count = preds.get(lpred);
 				if (count == null) {
 					preds.put(lpred, new MutableTripla(2, 0, 0));
