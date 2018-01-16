@@ -19,6 +19,7 @@ import java.util.regex.Pattern;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
+import javax.script.SimpleScriptContext;
 import javax.swing.plaf.basic.BasicInternalFrameTitlePane.MaximizeAction;
 
 import org.apache.commons.cli.BasicParser;
@@ -140,7 +141,8 @@ public class PredicateDynamicStats {
 		}
 
 		// if we need to read top-t triplets
-		int t = Integer.MAX_VALUE;;
+		int t = Integer.MAX_VALUE;
+		;
 		if (cmd.hasOption(tO.getOpt())) {
 			t = Integer.parseInt(cmd.getOptionValue(tO.getOpt()));
 		}
@@ -149,7 +151,6 @@ public class PredicateDynamicStats {
 		// time it as well!
 		long b4 = System.currentTimeMillis();
 		diffGraph(inl, inr, gzIn, out, gzOut, k, t);
-		
 
 	}
 
@@ -183,6 +184,7 @@ public class PredicateDynamicStats {
 		String rightTriple = inputr.readLine();
 		int comp;
 		Map<String, MutableTripla> preds = new HashMap<>();
+		Map<String, MutableTripla> uris = new HashMap<>();
 		MutableTripla count;
 		int ltripleCount = 0;
 		int rtripleCount = 0;
@@ -197,35 +199,96 @@ public class PredicateDynamicStats {
 			}
 
 			Pattern pattern = Pattern.compile(TRIPLE_REGEX);
-			if (comp < 0) {// triplet eliminado				
-				Matcher lmatcher = pattern.matcher(leftTriple);
-				String lpred = lmatcher.group(2);
+
+			String lsub = null;
+			String lpred = null;
+			String lobj = null;
+			String rsub = null;
+			String rpred = null;
+			String robj = null;
+			Matcher lmatcher = pattern.matcher(leftTriple);
+			if (lmatcher.matches()) {
+				lsub = lmatcher.group(1);
+				lpred = lmatcher.group(2);
+				lobj = lmatcher.group(3);
+			} else
+				System.err.println(leftTriple);
+
+			Matcher rmatcher = pattern.matcher(rightTriple);
+			if (rmatcher.matches()) {
+				rsub = rmatcher.group(1);
+				rpred = rmatcher.group(2);
+				robj = rmatcher.group(3);
+			} else
+				System.err.println(rightTriple);
+
+			if( lsub == null ||
+			 lpred == null ||
+			 lobj == null||
+			 rsub == null||
+			 rpred == null ||
+			 robj == null)
+				System.err.println(rightTriple + leftTriple);
+			
+			if (comp < 0) {// triplet eliminado
 				count = preds.get(lpred);
 				if (count == null) {
 					preds.put(lpred, new MutableTripla(1, 0, 1));
 				} else {
 					count.incrementDel();
 				}
+
+				count = uris.get(lsub);
+				if (count == null) {
+					uris.put(lsub, new MutableTripla(1, 0, 1));
+				} else {
+					count.incrementDel();
+				}
+
+				if (lobj.startsWith("<")) {
+					count = uris.get(lobj);// uri
+					if (count == null) {
+						uris.put(lobj, new MutableTripla(1, 0, 1));
+					} else {
+						count.incrementDel();
+					}
+				}
+
 				output.println("-\t" + leftTriple);
 				leftTriple = inputl.readLine();
 				++ltripleCount;
 
 			} else if (comp > 0) {// triplet agregado
-				Matcher rmatcher = pattern.matcher(rightTriple);
-				String rpred = rmatcher.group(2);				
+
 				count = preds.get(rpred);
 				if (count == null) {
 					preds.put(rpred, new MutableTripla(1, 1, 0));
 				} else {
 					count.incrementAdd();
 				}
+
+				count = uris.get(rsub);
+				if (count == null) {
+					uris.put(rsub, new MutableTripla(1, 1, 0));
+				} else {
+					count.incrementAdd();
+				}
+
+				if (robj.startsWith("<")) {
+					count = uris.get(robj);
+					if (count == null) {
+						uris.put(robj, new MutableTripla(1, 1, 0));
+					} else {
+						count.incrementAdd();
+					}
+				}
+
 				output.println("+\t" + rightTriple);
 				rightTriple = inputr.readLine();
 				++rtripleCount;
-				
+
 			} else {// iguales
-				Matcher lmatcher = pattern.matcher(leftTriple);
-				String lpred = lmatcher.group(2);
+
 				count = preds.get(lpred);
 				if (count == null) {
 					preds.put(lpred, new MutableTripla(2, 0, 0));
@@ -233,21 +296,37 @@ public class PredicateDynamicStats {
 					count.increment();
 					count.increment();
 				}
+
+				count = uris.get(lsub);
+				if (count == null) {
+					uris.put(lsub, new MutableTripla(2, 0, 0));
+				} else {
+					count.increment();
+					count.increment();
+				}
+
+				if (lobj.startsWith("<")) {
+					count = uris.get(lobj);// uri
+					if (count == null) {
+						uris.put(lobj, new MutableTripla(2, 0, 0));
+					} else {
+						count.increment();
+						count.increment();
+					}
+				}
+
 				leftTriple = inputl.readLine();
 				rightTriple = inputr.readLine();
 				++ltripleCount;
 				++rtripleCount;
 			}
-/*
-			if ((ltripleCount + rtripleCount) % TICKS == 0) {
-				System.err.println("Read" + (ltripleCount + rtripleCount) + " triples");
-				System.err.println(MemStats.getMemStats() + "\n");
-			}
-
-			if ((ltripleCount + rtripleCount) >= t) {
-				break;
-			}
-*/
+			
+			 if ((ltripleCount + rtripleCount) % TICKS == 0) {
+			 System.err.println("Read" + (ltripleCount + rtripleCount) +
+			 " triples"); System.err.println(MemStats.getMemStats() + "\n"); }
+			 
+			 if ((ltripleCount + rtripleCount) >= t) { break; }
+			 
 		}
 
 		System.out.println("Total de triplets in left:\t" + ltripleCount);
@@ -256,7 +335,7 @@ public class PredicateDynamicStats {
 		TreeSet<PredAndDyn> sortBuffer = new TreeSet<>(Collections.reverseOrder());
 		for (String pred : preds.keySet()) {
 			MutableTripla d = preds.get(pred);
-			PredAndDyn predyn = new PredAndDyn(pred, ((double) d.add) / d.total + ((double) d.del) / d.total);
+			PredAndDyn predyn = new PredAndDyn(pred, (double) (d.add + d.del));
 			sortBuffer.add(predyn);
 		}
 
@@ -270,6 +349,25 @@ public class PredicateDynamicStats {
 			}
 			System.out.println(i - k + "\t" + pred + "\t" + preds.get(pred).total + "\t" + preds.get(pred).add + "\t"
 					+ preds.get(pred).del);
+		}
+
+		TreeSet<PredAndDyn> sortBuffer1 = new TreeSet<>(Collections.reverseOrder());
+		for (String uri : uris.keySet()) {
+			MutableTripla d = uris.get(uri);
+			PredAndDyn predyn = new PredAndDyn(uri, (double) (d.add + d.del));
+			sortBuffer1.add(predyn);
+		}
+
+		k = i;
+		System.out.println("\nNo.\tURI\t+\t-");
+		while (!sortBuffer1.isEmpty()) {
+			PredAndDyn next = sortBuffer1.pollFirst();
+			String pred = next.getPred();
+			if (k-- <= 0) {
+				break;
+			}
+			System.out.println(i - k + "\t" + pred + "\t" + uris.get(pred).total + "\t" + uris.get(pred).add + "\t"
+					+ uris.get(pred).del);
 		}
 
 		inputl.close();
